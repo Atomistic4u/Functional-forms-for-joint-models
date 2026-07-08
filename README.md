@@ -1,4 +1,4 @@
-# Functional forms in joint models
+# Functional forms for joint models for longitudinal and time-to-event data
 
 This repository accompanies the paper
 
