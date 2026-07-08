@@ -1,0 +1,170 @@
+---
+title: "Illustration of Functional Forms in Joint Models using JMbayes2"
+author: "Companion code for: Functional forms in joint models for longitudinal and time-to-event data"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    number_sections: true
+---
+
+# Overview
+
+This document illustrates the syntax for fitting the different functional forms
+described in the accompanying paper
+
+> **Functional forms in joint models for longitudinal and time-to-event data: A practical guide with application and interpretation**
+
+using the example **Primary Biliary Cirrhosis (PBC)** dataset included in the
+`JMbayes2` package.
+
+The purpose of this document is to demonstrate the specification of the
+different association structures. The analyses presented here are illustrative
+only and are **not** intended to reproduce the results of the paper, which were
+based on the MIRAGE glioblastoma study.
+
+```{r setup, message=FALSE, warning=FALSE}
+library(JMbayes2)
+library(nlme)
+library(survival)
+library(splines)
+
+data("pbc2")
+data("pbc2.id")
+
+pbc2.id$status2 <- as.numeric(pbc2.id$status != "alive")
+```
+
+# Step 1: Fit the longitudinal submodel
+
+We model the longitudinal evolution of log serum bilirubin using a linear
+mixed-effects model with a natural cubic spline for time.
+
+```{r}
+fit_mixed <- lme(
+  log(serBilir) ~ ns(year, 2),
+  random = ~ ns(year, 2) | id,
+  data = pbc2
+)
+```
+
+# Step 2: Fit the survival submodel
+
+A Cox proportional hazards model is used for the event process.
+
+```{r}
+fit_cox <- coxph(
+  Surv(years, status2) ~ sex,
+  data = pbc2.id,
+  x = TRUE
+)
+```
+
+# Step 3: Fit the joint models
+
+## Current value
+
+```{r eval=FALSE}
+jm_current <- jm(
+  fit_cox,
+  fit_mixed,
+  time_var = "year",
+  n_chains = 5,
+  n_iter = 5000,
+  n_burnin = 1000
+)
+
+summary(jm_current)
+```
+
+---
+
+## Time-dependent slope
+
+```{r eval=FALSE}
+jm_slope <- update(
+  jm_current,
+  functional_forms = ~ velocity(log(serBilir))
+)
+
+summary(jm_slope)
+```
+
+---
+
+## Acceleration
+
+```{r eval=FALSE}
+jm_acceleration <- update(
+  jm_current,
+  functional_forms = ~ acceleration(log(serBilir))
+)
+
+summary(jm_acceleration)
+```
+
+---
+
+## Cumulative effect
+
+```{r eval=FALSE}
+jm_auc <- update(
+  jm_current,
+  functional_forms = ~ area(log(serBilir))
+)
+
+summary(jm_auc)
+```
+
+---
+
+## Restricted cumulative effect
+
+The hazard depends on the average biomarker exposure over the previous year.
+
+```{r eval=FALSE}
+jm_auc_recent <- update(
+  jm_current,
+  functional_forms =
+    ~ area(log(serBilir), time_window = 1)
+)
+
+summary(jm_auc_recent)
+```
+
+---
+
+## Change from baseline
+
+```{r eval=FALSE}
+jm_delta <- update(
+  jm_current,
+  functional_forms = ~ Delta(log(serBilir))
+)
+
+summary(jm_delta)
+```
+
+---
+
+## Change over the previous year
+
+```{r eval=FALSE}
+jm_delta_recent <- update(
+  jm_current,
+  functional_forms =
+    ~ Delta(log(serBilir), time_window = 1)
+)
+
+summary(jm_delta_recent)
+```
+
+---
+
+<h2>References</h2>
+
+Rizopoulos D, Miranda Afonso P, Papageorgiou G. **JMbayes2: Extended Joint Models for Longitudinal and Time-to-Event Data**. R package version 0.5-95; 2025. Available at: <https://github.com/drizopoulos/jmbayes2>.
